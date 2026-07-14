@@ -97,7 +97,7 @@ export default function AdminDashboard() {
             {doctors.length === 0 ? (
               <p className="text-muted">No doctors found.</p>
             ) : (
-              <div style={{ display: 'grid', gap: '1rem', maxStatus: '600px', overflowY: 'auto' }}>
+              <div style={{ display: 'grid', gap: '1rem', maxHeight: '600px', overflowY: 'auto' }}>
                 {doctors.map(doc => (
                   <div key={doc.user_id} className="card flex-between" style={{ padding: '1rem' }}>
                     <div>
