@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+
 import { useAuth } from '../../context/AuthContext';
 import { LogOut, Calendar } from 'lucide-react';
 import { apiFetch } from '../../services/api';
