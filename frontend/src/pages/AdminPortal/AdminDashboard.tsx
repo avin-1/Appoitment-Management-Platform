@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { LogOut, UserPlus } from 'lucide-react';
+import { LogOut, UserPlus, CalendarOff } from 'lucide-react';
 import { apiFetch } from '../../services/api';
 
 export default function AdminDashboard() {
@@ -16,6 +16,14 @@ export default function AdminDashboard() {
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Leave Form State
+  const [leaveDoctorId, setLeaveDoctorId] = useState('');
+  const [leaveDate, setLeaveDate] = useState('');
+  const [leaveReason, setLeaveReason] = useState('');
+  const [leaveError, setLeaveError] = useState('');
+  const [leaveSuccess, setLeaveSuccess] = useState('');
+  const [leaveLoading, setLeaveLoading] = useState(false);
 
   useEffect(() => {
     fetchDoctors();
@@ -75,6 +83,33 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleRecordLeave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLeaveLoading(true);
+    setLeaveError('');
+    setLeaveSuccess('');
+
+    try {
+      await apiFetch('/admin/leaves', {
+        method: 'POST',
+        body: JSON.stringify({
+          doctor_id: leaveDoctorId,
+          leave_date: leaveDate,
+          reason: leaveReason
+        })
+      });
+
+      setLeaveSuccess('Leave recorded. Affected slots/appointments cancelled and patients notified.');
+      setLeaveDoctorId('');
+      setLeaveDate('');
+      setLeaveReason('');
+    } catch (err: any) {
+      setLeaveError(err.message || 'Failed to record leave');
+    } finally {
+      setLeaveLoading(false);
+    }
+  };
+
   return (
     <div>
       <nav className="navbar">
@@ -116,75 +151,87 @@ export default function AdminDashboard() {
             )}
           </div>
 
-          {/* Right Column: Create Doctor Form */}
-          <div className="card">
-            <h3 className="mb-4 flex-center" style={{ justifyContent: 'flex-start', gap: '0.5rem' }}>
-              <UserPlus size={20} className="text-primary" /> Create Doctor Account
-            </h3>
+          {/* Right Column: Forms */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             
-            {formError && <div className="badge badge-danger mb-4" style={{ display: 'block', width: '100%' }}>{formError}</div>}
-            {formSuccess && <div className="badge badge-success mb-4" style={{ display: 'block', width: '100%' }}>{formSuccess}</div>}
+            {/* Create Doctor Form */}
+            <div className="card">
+              <h3 className="mb-4 flex-center" style={{ justifyContent: 'flex-start', gap: '0.5rem' }}>
+                <UserPlus size={20} className="text-primary" /> Create Doctor Account
+              </h3>
+              
+              {formError && <div className="badge badge-danger mb-4" style={{ display: 'block', width: '100%' }}>{formError}</div>}
+              {formSuccess && <div className="badge badge-success mb-4" style={{ display: 'block', width: '100%' }}>{formSuccess}</div>}
 
-            <form onSubmit={handleCreateDoctor}>
-              <div className="form-group">
-                <label className="form-label">Full Name</label>
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  value={fullName} 
-                  onChange={e => setFullName(e.target.value)} 
-                  required 
-                />
-              </div>
+              <form onSubmit={handleCreateDoctor}>
+                <div className="grid-cols-2" style={{ gap: '1rem' }}>
+                  <div className="form-group">
+                    <label className="form-label">Full Name</label>
+                    <input type="text" className="form-input" value={fullName} onChange={e => setFullName(e.target.value)} required />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Email Address</label>
+                    <input type="email" className="form-input" value={email} onChange={e => setEmail(e.target.value)} required />
+                  </div>
+                </div>
 
-              <div className="form-group">
-                <label className="form-label">Email Address</label>
-                <input 
-                  type="email" 
-                  className="form-input" 
-                  value={email} 
-                  onChange={e => setEmail(e.target.value)} 
-                  required 
-                />
-              </div>
+                <div className="grid-cols-2" style={{ gap: '1rem' }}>
+                  <div className="form-group">
+                    <label className="form-label">Password</label>
+                    <input type="password" className="form-input" value={password} onChange={e => setPassword(e.target.value)} required />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Specialisation</label>
+                    <input type="text" className="form-input" placeholder="e.g. Cardiologist" value={specialisation} onChange={e => setSpecialisation(e.target.value)} required />
+                  </div>
+                </div>
 
-              <div className="form-group">
-                <label className="form-label">Password</label>
-                <input 
-                  type="password" 
-                  className="form-input" 
-                  value={password} 
-                  onChange={e => setPassword(e.target.value)} 
-                  required 
-                />
-              </div>
+                <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem' }} disabled={loading}>
+                  {loading ? 'Creating...' : 'Create Doctor Account'}
+                </button>
+              </form>
+            </div>
 
-              <div className="form-group">
-                <label className="form-label">Specialisation</label>
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  placeholder="e.g. Cardiologist, General Physician"
-                  value={specialisation} 
-                  onChange={e => setSpecialisation(e.target.value)} 
-                  required 
-                />
-              </div>
+            {/* Record Leave Form */}
+            <div className="card">
+              <h3 className="mb-4 flex-center" style={{ justifyContent: 'flex-start', gap: '0.5rem' }}>
+                <CalendarOff size={20} className="text-danger" /> Record Doctor Leave
+              </h3>
+              <p className="text-muted mb-4" style={{ fontSize: '0.875rem' }}>
+                Recording a leave will auto-cancel any existing slots and scheduled appointments for that date, and email affected patients.
+              </p>
+              
+              {leaveError && <div className="badge badge-danger mb-4" style={{ display: 'block', width: '100%' }}>{leaveError}</div>}
+              {leaveSuccess && <div className="badge badge-success mb-4" style={{ display: 'block', width: '100%' }}>{leaveSuccess}</div>}
 
-              <div className="form-group">
-                <label className="form-label">Phone Number (Optional)</label>
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  value={phone} 
-                  onChange={e => setPhone(e.target.value)} 
-                />
-              </div>
+              <form onSubmit={handleRecordLeave}>
+                <div className="form-group">
+                  <label className="form-label">Select Doctor</label>
+                  <select className="form-input" value={leaveDoctorId} onChange={e => setLeaveDoctorId(e.target.value)} required>
+                    <option value="">-- Choose a Doctor --</option>
+                    {doctors.filter(d => d.approval_status === 'approved').map(d => (
+                      <option key={d.user_id} value={d.user_id}>{d.full_name} ({d.specialisation})</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className="grid-cols-2" style={{ gap: '1rem' }}>
+                  <div className="form-group">
+                    <label className="form-label">Leave Date</label>
+                    <input type="date" className="form-input" min={new Date().toISOString().split('T')[0]} value={leaveDate} onChange={e => setLeaveDate(e.target.value)} required />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Reason (Optional)</label>
+                    <input type="text" className="form-input" value={leaveReason} onChange={e => setLeaveReason(e.target.value)} placeholder="e.g. Sick Leave, Vacation" />
+                  </div>
+                </div>
 
-              <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loading}>
-                {loading ? 'Creating...' : 'Create Doctor Account'}
-              </button>
-            </form>
+                <button type="submit" className="btn btn-danger" style={{ width: '100%', marginTop: '0.5rem' }} disabled={leaveLoading || !leaveDoctorId || !leaveDate}>
+                  {leaveLoading ? 'Processing...' : 'Record Leave & Cancel Appointments'}
+                </button>
+              </form>
+            </div>
+
           </div>
         </div>
       </div>

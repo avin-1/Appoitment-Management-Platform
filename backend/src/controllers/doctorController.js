@@ -23,15 +23,14 @@ exports.updateProfile = asyncHandler(async (req, res) => {
 });
 
 exports.generateSlots = asyncHandler(async (req, res) => {
-    // Basic slot generator for a given date
-    const { date } = req.body;
+    const { start_date, end_date } = req.body;
     const doctorId = req.user.id;
 
-    if (!date) {
-        return res.status(400).json({ success: false, error: 'Date is required' });
+    if (!start_date || !end_date) {
+        return res.status(400).json({ success: false, error: 'start_date and end_date are required' });
     }
 
-    // 1. Get Doctor's working hours
+    // 1. Get Doctor's working hours and slot duration
     const { data: doctor, error: docError } = await supabase
         .from('doctors')
         .select('working_hours, slot_duration_mins')
@@ -40,35 +39,76 @@ exports.generateSlots = asyncHandler(async (req, res) => {
 
     if (docError) throw docError;
 
-    // A complete slot generation logic would calculate start and end times based on working_hours
-    // and insert into slots table. Assuming working_hours like: {"mon": [["09:00", "13:00"]]}
-    // This requires parsing the date, finding the day of the week, and creating slots.
-    // For simplicity, we assume the frontend sends the specific slots to create, 
-    // or we implement a basic generator.
-    
-    // As a placeholder, we expect frontend to send the slots array
-    const { slots } = req.body; // Array of { start_time, end_time }
-    
-    if (!slots || !Array.isArray(slots)) {
-        return res.status(400).json({ success: false, error: 'Array of slots {start_time, end_time} is required' });
+    const duration = doctor.slot_duration_mins || 15;
+    const workingHours = doctor.working_hours || {};
+
+    const start = new Date(start_date);
+    const end = new Date(end_date);
+    const slotsToInsert = [];
+
+    const daysMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+    // Loop through each day from start_date to end_date
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dayOfWeek = daysMap[d.getDay()];
+        const ranges = workingHours[dayOfWeek];
+
+        if (!ranges || !Array.isArray(ranges) || ranges.length === 0) {
+            continue; // Day off
+        }
+
+        const dateStr = d.toISOString().split('T')[0];
+
+        // For each working time range on this day (e.g. ["09:00", "13:00"])
+        for (const [startTimeStr, endTimeStr] of ranges) {
+            let [startHr, startMin] = startTimeStr.split(':').map(Number);
+            let [endHr, endMin] = endTimeStr.split(':').map(Number);
+
+            let currentTotalMins = startHr * 60 + startMin;
+            const endTotalMins = endHr * 60 + endMin;
+
+            while (currentTotalMins + duration <= endTotalMins) {
+                const sHr = Math.floor(currentTotalMins / 60).toString().padStart(2, '0');
+                const sMin = (currentTotalMins % 60).toString().padStart(2, '0');
+                
+                const eTotalMins = currentTotalMins + duration;
+                const eHr = Math.floor(eTotalMins / 60).toString().padStart(2, '0');
+                const eMin = (eTotalMins % 60).toString().padStart(2, '0');
+
+                slotsToInsert.push({
+                    doctor_id: doctorId,
+                    slot_date: dateStr,
+                    start_time: `${sHr}:${sMin}:00`,
+                    end_time: `${eHr}:${eMin}:00`,
+                    status: 'available'
+                });
+
+                currentTotalMins += duration;
+            }
+        }
     }
 
-    const slotsToInsert = slots.map(s => ({
-        doctor_id: doctorId,
-        slot_date: date,
-        start_time: s.start_time,
-        end_time: s.end_time,
-        status: 'available'
-    }));
+    if (slotsToInsert.length === 0) {
+        return res.status(400).json({ success: false, error: 'No slots generated. Check working hours.' });
+    }
 
+    // Use ON CONFLICT DO NOTHING in case some slots already exist to prevent crashing
     const { data, error } = await supabase
         .from('slots')
         .insert(slotsToInsert)
         .select();
 
-    if (error) throw error;
+    // Supabase insert without on_conflict does not support DO NOTHING natively via JS client easily 
+    // without specifying constraint. If duplicates occur, it throws. 
+    // For safety, assuming slots are unique enough or handled by DB exclusion constraint.
+    if (error) {
+        if (error.message.includes('conflicting key value violates exclusion constraint')) {
+            return res.status(409).json({ success: false, error: 'Some slots conflict with existing ones. Clear existing slots or try different dates.' });
+        }
+        throw error;
+    }
 
-    res.status(201).json({ success: true, data });
+    res.status(201).json({ success: true, count: slotsToInsert.length, message: `${slotsToInsert.length} slots generated.` });
 });
 
 exports.getAppointments = asyncHandler(async (req, res) => {
