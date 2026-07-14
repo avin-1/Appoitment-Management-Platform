@@ -19,11 +19,18 @@ const clearDatabase = async () => {
                 continue;
             }
 
-            console.log(`Deleting user: ${user.email} (${user.id})`);
+            console.log(`Deleting user records for: ${user.email} (${user.id})`);
+            
+            // Delete from child tables first because schema uses ON DELETE RESTRICT
+            await supabase.from('patients').delete().eq('user_id', user.id);
+            await supabase.from('doctors').delete().eq('user_id', user.id);
+            await supabase.from('google_oauth_tokens').delete().eq('user_id', user.id);
+            await supabase.from('users').delete().eq('id', user.id);
+
             const { error: deleteError } = await supabase.auth.admin.deleteUser(user.id);
             
             if (deleteError) {
-                console.error(`Failed to delete ${user.email}:`, deleteError.message);
+                console.error(`Failed to delete ${user.email}:`, deleteError);
             } else {
                 deletedCount++;
             }
